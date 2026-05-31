@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 eframe = "0.34.2"
 env_logger = "0.11.10"
+nalgebra = "0.35.0"

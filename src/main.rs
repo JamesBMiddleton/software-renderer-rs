@@ -1,15 +1,19 @@
 use eframe::egui;
-use std::io::ErrorKind;
 
 use engine;
+
+const VIEWPORT_WIDTH: usize = 320;
+const VIEWPORT_HEIGHT: usize  = 240;
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([320.0, 240.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([VIEWPORT_WIDTH as f32, VIEWPORT_HEIGHT as f32]),
         ..Default::default()
     };
+
+    let mut engine = engine::Engine{..Default::default()}; 
 
     eframe::run_ui_native("Demo", options, move |ui, _frame| {
         egui::CentralPanel::default().show_inside(ui, |ui| {
@@ -18,20 +22,22 @@ fn main() -> eframe::Result {
             // Output of engine needs to be of type in type "ImageData" to replace egui::ColorImage::example()
             // actual data will be in ImageData->Arc<ColorImage>->   Vec<Color32>
             // the options don't need changing, just match the window size to size of pixel array
-            let frame = engine::get_frame(engine::Config {
-                viewport_width: 1,
-                viewport_height: 1,
-            });
-            match frame {
-                Ok(f) => println!("{}", f.x),
-                Err(e) => match e {
-                    ErrorKind::NotFound => println!("wuh woh"),
-                    _ => panic!("crash n burn"),
-                },
-            }
+            let frame = engine.get_frame(engine::Options {
+                viewport_width: VIEWPORT_WIDTH,
+                viewport_height: VIEWPORT_HEIGHT,
+            }).unwrap();
+
+            let pixeldata = frame.as_slice().to_vec().into_iter().map(|rgba| {
+                    egui::Color32::from_rgb(rgba as u8, (rgba >> 8) as u8, (rgba >> 16) as u8)
+                }
+            ).collect();
+
+
+            let image = egui::ColorImage::new([frame.nrows(), frame.ncols()], pixeldata);
+
             let texture =
                 ui.ctx()
-                    .load_texture("frame", egui::ColorImage::example(), Default::default());
+                    .load_texture("frame", image, Default::default());
             ui.image((texture.id(), texture.size_vec2()));
         });
     })
