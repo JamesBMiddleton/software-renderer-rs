@@ -21,7 +21,6 @@ fn main() -> eframe::Result {
             if let Ok(frame) = engine.get_frame(engine::Options {
                 viewport_width: VIEWPORT_WIDTH,
                 viewport_height: VIEWPORT_HEIGHT,
-
             }) {
                 let pixeldata = frame
                     .as_slice()
