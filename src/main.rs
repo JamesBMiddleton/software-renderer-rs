@@ -14,35 +14,26 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
 
-    let mut engine = engine::Engine {
-        ..Default::default()
-    };
+    let mut engine = engine::Engine::new();
 
     eframe::run_ui_native("Demo", options, move |ui, _frame| {
         egui::CentralPanel::default().show_inside(ui, |ui| {
+            if let Ok(frame) = engine.get_frame(engine::Options {
+                viewport_width: VIEWPORT_WIDTH,
+                viewport_height: VIEWPORT_HEIGHT,
 
-            let frame = engine
-                .get_frame(engine::Options {
-                    viewport_width: VIEWPORT_WIDTH,
-                    viewport_height: VIEWPORT_HEIGHT,
-                })
-                .unwrap();
-
-            let pixeldata = frame
-                .as_slice()
-                .to_vec()
-                .into_iter()
-                .map(|rgba| {
-                    egui::Color32::from_rgb(rgba as u8, (rgba >> 8) as u8, (rgba >> 16) as u8)
-                })
-                .collect();
-
-            let image = egui::ColorImage::new([frame.nrows(), frame.ncols()], pixeldata);
-
-            let texture = ui.ctx().load_texture("frame", image, Default::default());
-            ui.image((texture.id(), texture.size_vec2()));
-
-            println!("frame");
+            }) {
+                let pixeldata = frame
+                    .as_slice()
+                    .iter()
+                    .map(|rgba| {
+                        egui::Color32::from_rgb(*rgba as u8, (rgba >> 8) as u8, (rgba >> 16) as u8)
+                    })
+                    .collect();
+                let image = egui::ColorImage::new([frame.nrows(), frame.ncols()], pixeldata);
+                let texture = ui.ctx().load_texture("frame", image, Default::default());
+                ui.image((texture.id(), texture.size_vec2()));
+            }
         });
     })
 }

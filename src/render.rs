@@ -1,11 +1,11 @@
 use nalgebra;
-use std::io::ErrorKind;
 
 type Vec3 = nalgebra::SVector<f32, 3>;
 type Vec4 = nalgebra::SVector<f32, 4>;
 type Mat3 = nalgebra::SMatrix<f32, 3, 3>;
 type Mat4 = nalgebra::SMatrix<f32, 4, 4>;
 type Face3 = nalgebra::SVector<Vec3, 3>;
+type Face4 = nalgebra::SVector<Vec4, 3>;
 type Frame = nalgebra::DMatrix<u32>;
 type ZBuffer = nalgebra::DMatrix<f32>;
 
@@ -22,12 +22,6 @@ pub struct View {
     pub eye: Vec3,
     pub center: Vec3,
     pub up: Vec3,
-}
-
-#[derive(Default)]
-pub struct Renderer {
-    pub framebuffer: Frame,
-    pub zbuffer: ZBuffer,
 }
 
 // Perspective projection matrix.
@@ -74,91 +68,75 @@ fn view_matrix_get(eye: Vec3, center: Vec3, up: Vec3) -> Mat4 {
     ])
 }
 
-fn rasterize(framebuffer: &mut Frame, zbuffer: &mut ZBuffer, a_clip: Vec4, b_clip: Vec4, c_clip: Vec4, viewport_width: usize, viewport_height: usize, color: u32) {
-    let a_ndc = a_clip.xyz() / a_clip.w;
-    let b_ndc = b_clip.xyz() / b_clip.w;
-    let c_ndc = c_clip.xyz() / c_clip.w;
+fn rasterize(framebuffer: &mut Frame, zbuffer: &mut ZBuffer, clip: Face4, viewport_width: usize, viewport_height: usize, color: u32) {
+
+    let ndc = Face3::from_iterator(clip.iter().map(|vertex| vertex.xyz() / vertex.w ));
 
     let x_scale = viewport_width as f32 / 2.0;
     let x_translate = viewport_width as f32 / 2.0;
     let y_scale = viewport_height as f32 / 2.0;
     let y_translate = viewport_height as f32 / 2.0;
 
-    let a_screen = Vec3::new((a_ndc.x * x_scale) + x_translate, (a_ndc.y * y_scale) + y_translate, a_ndc.z);
-    let b_screen = Vec3::new((b_ndc.x * x_scale) + x_translate, (b_ndc.y * y_scale) + y_translate, b_ndc.z);
-    let c_screen = Vec3::new((c_ndc.x * x_scale) + x_translate, (c_ndc.y * y_scale) + y_translate, c_ndc.z);
+    let screen = Face3::from_iterator(ndc.iter().map(|vertex| Vec3::new((vertex.x * x_scale) + x_translate, (vertex.y * y_scale) + y_translate, vertex.z)));
 
     let abc = Mat3::from_row_slice(&[
-        a_screen.x, a_screen.y, 1.0,
-        b_screen.x, b_screen.y, 1.0,
-        c_screen.x, c_screen.y, 1.0]);
+        screen[0].x, screen[0].y, 1.0,
+        screen[1].x, screen[1].y, 1.0,
+        screen[2].x, screen[2].y, 1.0]);
 
     if abc.determinant() < 1.0 {
         return;
     }
 
-    let bbox_max_x = a_screen.x.max(b_screen.x).max(c_screen.x) as usize;
-    let bbox_max_y = a_screen.y.max(b_screen.y).max(c_screen.y) as usize;
-    let bbox_min_x = a_screen.x.min(b_screen.x).min(c_screen.x) as usize;
-    let bbox_min_y = a_screen.y.min(b_screen.y).min(c_screen.y) as usize;
+    let bbox_max_x = screen[0].x.max(screen[1].x).max(screen[2].x) as usize;
+    let bbox_max_y = screen[0].y.max(screen[1].y).max(screen[2].y) as usize;
+    let bbox_min_x = screen[0].x.min(screen[1].x).min(screen[2].x) as usize;
+    let bbox_min_y = screen[0].y.min(screen[1].y).min(screen[2].y) as usize;
 
     for x in bbox_min_x..bbox_max_x {
         for y in bbox_min_y..bbox_max_y {
-            let z_bias = 0.003;
-            let p = Vec3::new(x as f32, y as f32, 1.0);
-            let bary = abc.try_inverse().unwrap().transpose() * p; // could panic!
+            if let Some(abc_inv) = abc.try_inverse() {
+                let p = Vec3::new(x as f32, y as f32, 1.0);
+                let bary = abc_inv.transpose() * p;
 
-            if bary.x < 0.0 || bary.y < 0.0 || bary.z < 0.0 {
-                continue;
+                if bary.x < 0.0 || bary.y < 0.0 || bary.z < 0.0 {
+                    continue;
+                }
+
+                let z = (screen[0].z * bary.x) + (screen[1].z * bary.y) + (screen[2].z * bary.z); 
+                let z_bias = 0.003;
+                if zbuffer[(x, y)] < (z-z_bias) {
+                    continue;
+                }
+
+                zbuffer[(x, y)] = z;
+                framebuffer[(x, y)] = color;
             }
-
-            let z = (a_screen.z * bary.x) + (b_screen.z * bary.y) + (c_screen.z * bary.z); 
-            if zbuffer[(x, y)] < (z-z_bias) {
-                continue;
-            }
-
-            zbuffer[(x, y)] = z;
-            framebuffer[(x, y)] = color;
         }
     }
 }
 
-impl Renderer {
-    pub fn get_frame(
-        &mut self,
+pub fn draw_frame(
+        framebuffer: &mut Frame,
+        zbuffer: &mut ZBuffer,
         view: View,
         faces: Vec<Face3>,
         colors: Vec<u32>,
         options: Options,
-    ) -> Result<&Frame, ErrorKind> {
-        self.framebuffer =
+    ) {
+        *framebuffer =
             Frame::from_element(options.viewport_width, options.viewport_height, 0xFF16110E);
-        self.zbuffer = ZBuffer::from_element(options.viewport_width, options.viewport_height, 2.0);
+        *zbuffer = ZBuffer::from_element(options.viewport_width, options.viewport_height, 2.0);
 
         let ratio = (options.viewport_width as f32) / (options.viewport_height as f32);
         let projection_matrix =
             projection_matrix_get(options.rad_fovy, ratio, options.z_near, options.z_far);
-        let eye_view_matrix = view_matrix_get(view.eye, view.center, view.up);
+        let view_matrix = view_matrix_get(view.eye, view.center, view.up);
 
         for (face, color) in faces.iter().zip(colors.iter()) {
-            // let world : Face4 = face.iter().map(|vertex| vertex.to_homogeneous()).collect(); why
-            // doesn't this work?
-            
-            let a_world = face[0].push(1.0);
-            let b_world = face[1].push(1.0);
-            let c_world = face[2].push(1.0);
-
-            let a_eye = eye_view_matrix * a_world;
-            let b_eye = eye_view_matrix * b_world;
-            let c_eye = eye_view_matrix * c_world;
-
-            let a_clip = projection_matrix * a_eye;
-            let b_clip = projection_matrix * b_eye;
-            let c_clip = projection_matrix * c_eye;
-
-            rasterize(&mut self.framebuffer, &mut self.zbuffer, a_clip, b_clip, c_clip, options.viewport_width, options.viewport_height, *color);
+            let world = Face4::from_iterator(face.iter().map(|vertex| vertex.push(1.0)));
+            let eye = Face4::from_iterator(world.iter().map(|vertex| view_matrix * *vertex));
+            let clip = Face4::from_iterator(eye.iter().map(|vertex| projection_matrix * *vertex));
+            rasterize(framebuffer, zbuffer, clip, options.viewport_width, options.viewport_height, *color);
         }
-
-        return Ok(&self.framebuffer);
-    }
 }

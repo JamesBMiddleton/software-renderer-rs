@@ -1,12 +1,13 @@
 use std::io::ErrorKind;
 
-mod chunk;
 mod render;
 
 type Vec3 = nalgebra::SVector<f32, 3>;
 type Rot3 = nalgebra::Rotation3<f32>;
-type Face = nalgebra::SVector<Vec3, 3>;
 type Frame = nalgebra::DMatrix<u32>;
+type ZBuffer = nalgebra::DMatrix<f32>;
+
+use nalgebra::vector;
 
 #[derive(Default)]
 pub struct Options {
@@ -14,17 +15,24 @@ pub struct Options {
     pub viewport_width: usize,
 }
 
-#[derive(Default)]
 pub struct Engine {
-    pub renderer: render::Renderer,
-    pub theta: f32,
+    framebuffer: Frame,
+    zbuffer: ZBuffer,
+    theta: f32,
 }
 
 impl Engine {
-    pub fn get_frame(&mut self, options: Options) -> Result<&Frame, ErrorKind> {
+    pub fn new() -> Self {
+        Engine {
+            framebuffer: Frame::default(),
+            zbuffer: ZBuffer::default(),
+            theta: 0.0,
+        }
+    }
 
-        let xrot = Rot3::from_axis_angle( &Vec3::z_axis(), self.theta);
-        let yrot = Rot3::from_axis_angle( &Vec3::z_axis(), self.theta);
+    pub fn get_frame(&mut self, options: Options) -> Result<&Frame, ErrorKind> {
+        let xrot = Rot3::from_axis_angle(&Vec3::z_axis(), self.theta);
+        let yrot = Rot3::from_axis_angle(&Vec3::z_axis(), self.theta);
         self.theta += 0.01;
 
         let view = render::View {
@@ -40,36 +48,37 @@ impl Engine {
             z_far: 100.0,
         };
 
-        let faces = vec![Face::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 1.0), Vec3::new(0.0, 1.0, 1.0)),
-                        Face::new(Vec3::new(0.0, 1.0, 1.0), Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 0.0, 0.0)),
-                        Face::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(1.0, 0.0, 1.0)),
-                        Face::new(Vec3::new(1.0, 0.0, 1.0), Vec3::new(0.0, 0.0, 1.0), Vec3::new(0.0, 0.0, 0.0)),
-                        Face::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0), Vec3::new(1.0, 1.0, 0.0)),
-                        Face::new(Vec3::new(1.0, 1.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 0.0)),
-                        Face::new(Vec3::new(1.0, 1.0, 1.0), Vec3::new(1.0, 0.0, 1.0), Vec3::new(1.0, 0.0, 0.0)),
-                        Face::new(Vec3::new(1.0, 0.0, 0.0), Vec3::new(1.0, 1.0, 0.0), Vec3::new(1.0, 1.0, 1.0)),
-                        Face::new(Vec3::new(1.0, 1.0, 1.0), Vec3::new(1.0, 1.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
-                        Face::new(Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 1.0, 1.0), Vec3::new(1.0, 1.0, 1.0)),
-                        Face::new(Vec3::new(1.0, 1.0, 1.0), Vec3::new(0.0, 1.0, 1.0), Vec3::new(0.0, 0.0, 1.0)),
-                        Face::new(Vec3::new(0.0, 0.0, 1.0), Vec3::new(1.0, 0.0, 1.0), Vec3::new(1.0, 1.0, 1.0)),
-                        Face::new(Vec3::new(0.0, 0.0, 1.0), Vec3::new(1.0, 0.0, 1.0), Vec3::new(1.0, 1.0, 1.0)),
+        #[rustfmt::skip]
+        let faces = vec![
+            vector![ vector![0.0, 0.0, 0.0], vector![0.0, 0.0, 1.0], vector![0.0, 1.0, 1.0] ],
+            vector![ vector![0.0, 1.0, 1.0], vector![0.0, 1.0, 0.0], vector![0.0, 0.0, 0.0] ],
+            vector![ vector![0.0, 0.0, 0.0], vector![1.0, 0.0, 0.0], vector![1.0, 0.0, 1.0] ],
+            vector![ vector![1.0, 0.0, 1.0], vector![0.0, 0.0, 1.0], vector![0.0, 0.0, 0.0] ],
+            vector![ vector![0.0, 0.0, 0.0], vector![0.0, 1.0, 0.0], vector![1.0, 1.0, 0.0] ],
+            vector![ vector![1.0, 1.0, 0.0], vector![1.0, 0.0, 0.0], vector![0.0, 0.0, 0.0] ],
+            vector![ vector![1.0, 1.0, 1.0], vector![1.0, 0.0, 1.0], vector![1.0, 0.0, 0.0] ],
+            vector![ vector![1.0, 0.0, 0.0], vector![1.0, 1.0, 0.0], vector![1.0, 1.0, 1.0] ],
+            vector![ vector![1.0, 1.0, 1.0], vector![1.0, 1.0, 0.0], vector![0.0, 1.0, 0.0] ],
+            vector![ vector![0.0, 1.0, 0.0], vector![0.0, 1.0, 1.0], vector![1.0, 1.0, 1.0] ],
+            vector![ vector![1.0, 1.0, 1.0], vector![0.0, 1.0, 1.0], vector![0.0, 0.0, 1.0] ],
+            vector![ vector![0.0, 0.0, 1.0], vector![1.0, 0.0, 1.0], vector![1.0, 1.0, 1.0] ],
+            vector![ vector![0.0, 0.0, 1.0], vector![1.0, 0.0, 1.0], vector![1.0, 1.0, 1.0] ],
         ];
 
         let colors = vec![
-            0xFFFFFFFF, 
-            0xFF0000FF,
-            0xFFFFFFFF,
-            0xFF0000FF,
-            0xFFFFFFFF,
-            0xFF0000FF,
-            0xFFFFFFFF,
-            0xFF0000FF,
-            0xFFFFFFFF,
-            0xFF0000FF,
-            0xFFFFFFFF,
-            0xFF0000FF,
+            0x00FFFFFF, 0x000000FF, 0x00FFFFFF, 0x000000FF, 0x00FFFFFF, 0x000000FF, 0x00FFFFFF,
+            0x000000FF, 0x00FFFFFF, 0x000000FF, 0x00FFFFFF, 0x000000FF,
         ];
 
-        self.renderer.get_frame(view, faces, colors, options)
+        render::draw_frame(
+            &mut self.framebuffer,
+            &mut self.zbuffer,
+            view,
+            faces,
+            colors,
+            options,
+        );
+
+        Ok(&self.framebuffer)
     }
 }
