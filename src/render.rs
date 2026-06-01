@@ -107,7 +107,7 @@ fn rasterize(framebuffer: &mut Frame, zbuffer: &mut ZBuffer, a_clip: Vec4, b_cli
             let z_bias = 0.003;
             let p = Vec3::new(x as f32, y as f32, 1.0);
             let bary = abc.try_inverse().unwrap().transpose() * p; // could panic!
-            
+
             if bary.x < 0.0 || bary.y < 0.0 || bary.z < 0.0 {
                 continue;
             }
@@ -133,7 +133,7 @@ impl Renderer {
     ) -> Result<&Frame, ErrorKind> {
         self.framebuffer =
             Frame::from_element(options.viewport_width, options.viewport_height, 0xFF16110E);
-        self.zbuffer = ZBuffer::from_element(options.viewport_width, options.viewport_height, 1.0);
+        self.zbuffer = ZBuffer::from_element(options.viewport_width, options.viewport_height, 2.0);
 
         let ratio = (options.viewport_width as f32) / (options.viewport_height as f32);
         let projection_matrix =
@@ -144,9 +144,9 @@ impl Renderer {
             // let world : Face4 = face.iter().map(|vertex| vertex.to_homogeneous()).collect(); why
             // doesn't this work?
             
-            let a_world = face[0].to_homogeneous();
-            let b_world = face[1].to_homogeneous();
-            let c_world = face[2].to_homogeneous();
+            let a_world = face[0].push(1.0);
+            let b_world = face[1].push(1.0);
+            let c_world = face[2].push(1.0);
 
             let a_eye = eye_view_matrix * a_world;
             let b_eye = eye_view_matrix * b_world;

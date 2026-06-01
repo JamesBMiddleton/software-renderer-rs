@@ -2,8 +2,8 @@ use eframe::egui;
 
 use engine;
 
-const VIEWPORT_WIDTH: usize = 320;
-const VIEWPORT_HEIGHT: usize = 240;
+const VIEWPORT_WIDTH: usize = 800;
+const VIEWPORT_HEIGHT: usize = 800;
 
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -41,6 +41,8 @@ fn main() -> eframe::Result {
 
             let texture = ui.ctx().load_texture("frame", image, Default::default());
             ui.image((texture.id(), texture.size_vec2()));
+
+            println!("frame");
         });
     })
 }
