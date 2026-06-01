@@ -28,7 +28,9 @@ impl Engine {
         let options = render::Options {
             viewport_height: options.viewport_height,
             viewport_width: options.viewport_width,
-            ..Default::default()
+            rad_fovy: 90.0_f32.to_radians(),
+            z_near: 1.0,
+            z_far: 100.0,
         };
 
         let faces = vec![Face::new(
